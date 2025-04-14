@@ -9,28 +9,28 @@ import { PrismaClient } from '@prisma/index';
 const prisma = new PrismaClient().$extends({
   name: 'deletedAt',
   model: {
-    // usersOnMeets: {
-    //   async delete({ where }) {
-    //     return prisma.usersOnMeets.update({
-    //       where: {
-    //         ...where,
-    //       },
-    //       data: {
-    //         deletedAt: new Date(),
-    //       },
-    //     });
-    //   },
-    //   async deleteMany({ where }) {
-    //     return prisma.usersOnMeets.updateMany({
-    //       where: {
-    //         ...where,
-    //       },
-    //       data: {
-    //         deletedAt: new Date(),
-    //       },
-    //     });
-    //   },
-    // },
+    usersOnMeets: {
+      async delete({ where }: any) {
+        return prisma.usersOnMeets.update({
+          where: {
+            ...where,
+          },
+          data: {
+            deletedAt: new Date(),
+          },
+        });
+      },
+      async deleteMany({ where }: any) {
+        return prisma.usersOnMeets.updateMany({
+          where: {
+            ...where,
+          },
+          data: {
+            deletedAt: new Date(),
+          },
+        });
+      },
+    },
   },
 });
 
