@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "./"
@@ -15,6 +9,360 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// 사용자
 model User {
-  id Int @id @default(autoincrement())
+  id            Int            @id @default(autoincrement())
+  name          String         @default("")
+  email         String         @default("")
+  password      String         @default("")
+  phone         String         @default("")
+  profile       String         @default("")
+  privacyPolicy Boolean        @default(false)
+  termsOfUser   Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  token         Token?
+  alarmSetting  AlarmSetting?
+  alarm         Alarm[]
+  Meet          Meet[]
+  UsersOnMeets  UsersOnMeets[]
+  Schedule      Schedule[]
+}
+
+// JWT
+model Token {
+  id               Int       @id @default(autoincrement())
+  access           String?   @db.Text
+  accessExpiresAt  DateTime?
+  refresh          String?   @db.Text
+  refreshExpiresAt DateTime?
+  updatedAt        DateTime  @updatedAt
+  userId           Int       @unique
+  user             User      @relation(fields: [userId], references: [id])
+}
+
+// 알림 세팅
+model AlarmSetting {
+  id               Int      @id @default(autoincrement())
+  createSchedule   Boolean  @default(true)
+  updateSchedule   Boolean  @default(true)
+  upcomingSchedule Boolean  @default(true)
+  updatedAt        DateTime @updatedAt
+  userId           Int      @unique
+  user             User     @relation(fields: [userId], references: [id])
+}
+
+// 알람
+model Alarm {
+  id         Int       @id @default(autoincrement())
+  type       Int       @default(1) // 0 = 모임, 1 = 스케쥴, 2 = 그 외 등
+  title      String    @default("")
+  read       Boolean   @default(false) // 읽음 여부
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  userId     Int       @unique
+  user       User      @relation(fields: [userId], references: [id])
+  Schedule   Schedule? @relation(fields: [scheduleId], references: [id])
+  scheduleId Int?
+}
+
+// 모임
+model Meet {
+  id           Int            @id @default(autoincrement())
+  title        String
+  description  String?
+  color        String?
+  private      Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  userId       Int // 모임 생성자
+  user         User           @relation(fields: [userId], references: [id])
+  meetCode     MeetCode[] // 모임 초대 코드
+  usersOnMeets UsersOnMeets[] // 모임 참여자 (생성자 포함)
+  Schedule     Schedule[]
+}
+
+// 모임 코드
+model MeetCode {
+  id           Int            @id @default(autoincrement())
+  code         String // 초대 코드
+  expiresAt    DateTime // 초대 코드 만료일 (만료 시 인증 불가)
+  createdAt    DateTime       @default(now())
+  meetId       Int // 초대 코드에 연결된 모임
+  meet         Meet           @relation(fields: [meetId], references: [id])
+  usersOnMeets UsersOnMeets[]
+}
+
+// 모임 참여자
+model UsersOnMeets {
+  authority  String // 모임 관련 전체 권한 = creator, 스케쥴 수정, 생성, 삭제 = manager, 읽기 전용 = member
+  authorized DateTime // 권한 수정일
+  createdAt  DateTime  @default(now()) // 모임 참여일
+  deletedAt  DateTime? // 모임 탈퇴일
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id])
+  meetId     Int
+  meet       Meet      @relation(fields: [meetId], references: [id])
+  meetCodeId Int // 모임 참여 시 인증한 초대 코드
+  meetCode   MeetCode  @relation(fields: [meetCodeId], references: [id])
+
+  @@id([userId, meetId])
+}
+
+// 스케쥴
+model Schedule {
+  id                  Int                   @id @default(autoincrement())
+  title               String                @default("")
+  date                DateTime
+  start               DateTime
+  end                 DateTime
+  vehicle             String
+  description         String                @default("")
+  thumbnail           String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  userId              Int // 스케쥴 생성자 (creator or manager)
+  user                User                  @relation(fields: [userId], references: [id])
+  alarm               Alarm[] // 연결된 알림들
+  meetId              Int // 관련 모임
+  meet                Meet                  @relation(fields: [meetId], references: [id])
+  Place               Place[]
+  routeFindingWorking RouteFindingWorking[]
+  routeFindingCar     RouteFindingCar[]
+}
+
+// 장소
+model Place {
+  id                                            Int                                             @id @default(autoincrement())
+  name                                          String                                          @default("")
+  thumbnail                                     String?
+  address                                       String                                          @default("")
+  addressDetail                                 String                                          @default("")
+  latitude                                      Int
+  longitude                                     Int
+  date                                          DateTime?
+  reservation                                   Boolean                                         @default(false)
+  memo                                          String                                          @default("")
+  index                                         Int                                             @default(0) // 순서
+  createdAt                                     DateTime                                        @default(now())
+  updatedAt                                     DateTime                                        @updatedAt
+  scheduleId                                    Int // 소속 스케쥴
+  schedule                                      Schedule                                        @relation(fields: [scheduleId], references: [id])
+  PlaceRouteFindingPublicTransportationRelation PlaceRouteFindingPublicTransportationRelation[]
+}
+
+// 대중교통 API 시 장소와 장소 간의 연결 처리
+model PlaceRouteFindingPublicTransportationRelation {
+  place                              Place                            @relation(fields: [placeId], references: [id])
+  placeId                            Int
+  routeFindingPublicTransportation   RouteFindingPublicTransportation @relation(fields: [routeFindingPublicTransportationId], references: [id])
+  routeFindingPublicTransportationId Int
+
+  @@id([placeId, routeFindingPublicTransportationId])
+}
+
+// 보행자 경로 안내
+model RouteFindingWorking {
+  id                                    Int                                 @id @default(autoincrement())
+  latitude                              Int                                 @default(0) // 위도
+  longitude                             Int                                 @default(0) // 경도
+  index                                 Int                                 @default(0) // 경로 순번
+  pointIndex                            Int                                 @default(0) // 안내점 노드 순번
+  lineIndex                             Int                                 @default(0) // 구간의 순번
+  name                                  String                              @default("") // 안내지점 명칭
+  description                           String                              @default("") // 길 안내 정보
+  direction                             String                              @default("") // 방면 명칭
+  intersectionName                      String                              @default("") // 교차로 명칭
+  nearPoiX                              String                              @default("") // 안내지점 근방 poiX 좌표
+  nearPoiY                              String                              @default("") // 안내지점 근방 poiY 좌표
+  nearPoiName                           String                              @default("") // 안내지점 근방 poi
+  facilityName                          String                              @default("") // 구간 시설물 타입 명칭
+  totalDistance                         Int                                 @default(0) // 경로 총 길이 (pointType = SP 때만)
+  totalTime                             Int                                 @default(0) // 경로 총 소요시간 (pointType = SP 때만)
+  distance                              Int                                 @default(0) // 구간 거리 (m)
+  time                                  Int                                 @default(0) // 구간 소요 시간 (s)
+  routeFindingWorkingTurnType           RouteFindingWorkingTurnType         @relation(fields: [routeFindingWorkingTurnTypeId], references: [id])
+  routeFindingWorkingTurnTypeId         Int
+  routeFindingWorkingPointType          RouteFindingWorkingPointType        @relation(fields: [routeFindingWorkingPointTypeId], references: [id])
+  routeFindingWorkingPointTypeId        Int
+  routeFindingWorkingFacilityType       RouteFindingWorkingFacilityType     @relation(fields: [routeFindingWorkingFacilityTypeId], references: [id])
+  routeFindingWorkingFacilityTypeId     Int
+  routeFindingWorkingCategoryRoadType   RouteFindingWorkingCategoryRoadType @relation(fields: [routeFindingWorkingCategoryRoadTypeId], references: [id])
+  routeFindingWorkingCategoryRoadTypeId Int
+  Schedule                              Schedule?                           @relation(fields: [scheduleId], references: [id])
+  scheduleId                            Int?
+}
+
+// 보행자 경로 안내 시 회전 정보
+model RouteFindingWorkingTurnType {
+  id                  Int                   @id @default(autoincrement())
+  type                Int
+  description         String
+  RouteFindingWorking RouteFindingWorking[]
+}
+
+// 보행자 경로 안내 시 안내지점 구분
+model RouteFindingWorkingPointType {
+  id                  Int                   @id @default(autoincrement())
+  type                String
+  description         String
+  RouteFindingWorking RouteFindingWorking[]
+}
+
+// 보행자 경로 안내 시 구간의 시설물 정보
+model RouteFindingWorkingFacilityType {
+  id                  Int                   @id @default(autoincrement())
+  type                String
+  description         String
+  RouteFindingWorking RouteFindingWorking[]
+}
+
+// 보행자 경로 안내 시 도로 타입 정보
+model RouteFindingWorkingRoadType {
+  id          Int    @id @default(autoincrement())
+  type        Int
+  description String
+}
+
+// 보행자 경로 안내 시 특화거리 정보
+model RouteFindingWorkingCategoryRoadType {
+  id                  Int                   @id @default(autoincrement())
+  type                Int
+  description         String
+  RouteFindingWorking RouteFindingWorking[]
+}
+
+// 자동차 경로 안내
+model RouteFindingCar {
+  id                         Int                       @id @default(autoincrement())
+  usedFavoriteRouteVertices  String                    @default("")
+  type                       String                    @default("Point") // geometry 의 type
+  latitude                   Int                       @default(0) // 위도
+  longitude                  Int                       @default(0) // 경도
+  index                      Int                       @default(0) // 경로 순번
+  pointIndex                 Int                       @default(0) // 안내점 노드 순번
+  lineIndex                  Int                       @default(0) // 링크의 순번 (type = LineString 때만)
+  name                       String                    @default("") // 안내지점 명칭
+  description                String                    @default("") // 길 안내 정보
+  nextRoadName               String                    @default("") // 다음 구간의 도로 명칭 (type = Point 때만)
+  totalDistance              Int                       @default(0) // 경로 총 길이 (pointType = S 때만)
+  totalTime                  Int                       @default(0) // 경로 총 소요 시간 (pointType = S 때만)
+  totalFare                  Int                       @default(0) // 경로 총 요금 (pointType = S)
+  taxiFare                   Int                       @default(0) // 택시 예상 요금
+  distance                   Int                       @default(0) // 구간 거리 (type = LineString 때만) (m)
+  time                       Int                       @default(0) // 구간 통과 시간 (type = LineString) (s)
+  fare                       Int                       @default(0) // 톨게이트 비용
+  routeFindingCarTurnType    RouteFindingCarTurnType   @relation(fields: [routeFindingCarTurnTypeId], references: [id])
+  routeFindingCarTurnTypeId  Int
+  RouteFindingPointType      RouteFindingPointType     @relation(fields: [routeFindingPointTypeId], references: [id])
+  routeFindingPointTypeId    Int
+  routeFindingTraffic        RouteFindingTraffic?      @relation(fields: [routeFindingTrafficId], references: [id])
+  routeFindingTrafficId      Int? // 교통 정보 (type = LineString 때만)
+  routeFindingRoadType       RouteFindingRoadType      @relation(fields: [routeFindingRoadTypeId], references: [id])
+  routeFindingRoadTypeId     Int
+  routeFindingFacilityType   RouteFindingFacilityType? @relation(fields: [routeFindingFacilityTypeId], references: [id])
+  routeFindingFacilityTypeId Int? // 구간의 시설물 타입 정보 (type = LineString 때만)
+  Schedule                   Schedule?                 @relation(fields: [scheduleId], references: [id])
+  scheduleId                 Int?
+}
+
+// 자동자 경로 안내 시 회전 정보
+model RouteFindingCarTurnType {
+  id              Int               @id @default(autoincrement())
+  type            Int
+  description     String
+  RouteFindingCar RouteFindingCar[]
+}
+
+// 자동차 경로 안내 시 안내지점 구분
+model RouteFindingPointType {
+  id              Int               @id @default(autoincrement())
+  type            String
+  description     String
+  RouteFindingCar RouteFindingCar[]
+}
+
+// 자동차 경로 안내 시 교통 정보
+model RouteFindingTraffic {
+  id              Int               @id @default(autoincrement())
+  type            String
+  description     String
+  RouteFindingCar RouteFindingCar[]
+}
+
+// 자동차 경로 안내 시 도로 타입 정보
+model RouteFindingRoadType {
+  id              Int               @id @default(autoincrement())
+  type            Int
+  description     String
+  RouteFindingCar RouteFindingCar[]
+}
+
+// 자동차 경로 안내 시 구간의 시설물 타입 정보
+model RouteFindingFacilityType {
+  id              Int               @id @default(autoincrement())
+  type            Int
+  description     String
+  RouteFindingCar RouteFindingCar[]
+}
+
+// 대중교통 길 찾기
+model RouteFindingPublicTransportation {
+  id                                            Int                                             @id @default(autoincrement())
+  totalFare                                     Int                                             @default(0)
+  currency                                      String                                          @default("원")
+  currentCode                                   String                                          @default("KRW")
+  totalTime                                     Int                                             @default(0)
+  totalWalkTime                                 Int                                             @default(0)
+  transferCount                                 Int                                             @default(0)
+  totalDistance                                 Int                                             @default(0)
+  pathType                                      Int                                             @default(0)
+  totalWalkDistance                             Int                                             @default(0)
+  routeFindingPublicTransportationReg           RouteFindingPublicTransportationReg[]
+  PlaceRouteFindingPublicTransportationRelation PlaceRouteFindingPublicTransportationRelation[]
+}
+
+// 대중교통 길 찾기 시 상세 정보
+model RouteFindingPublicTransportationReg {
+  id                                       Int                                        @id @default(autoincrement())
+  mode                                     String                                     @default("")
+  routeColor                               String                                     @default("")
+  sectionTime                              Int                                        @default(0)
+  route                                    String                                     @default("")
+  distance                                 Int                                        @default(0)
+  startName                                String                                     @default("")
+  startLongitude                           Int                                        @default(0)
+  startLatitude                            Int                                        @default(0)
+  endName                                  String                                     @default("")
+  endLongitude                             Int                                        @default(0)
+  endLatitude                              Int                                        @default(0)
+  passStopType                             Int                                        @default(0)
+  passStopLinestring                       String                                     @default("")
+  RouteFindingPublicTransportation         RouteFindingPublicTransportation           @relation(fields: [routeFindingPublicTransportationId], references: [id])
+  routeFindingPublicTransportationId       Int
+  routeFindingPublicTransportationStep     RouteFindingPublicTransportationStep[]
+  routeFindingPublicTransportationPassStop RouteFindingPublicTransportationPassStop[]
+}
+
+// 대중교통 길 찾기 시 도보
+model RouteFindingPublicTransportationStep {
+  id                                    Int                                 @id @default(autoincrement())
+  streetName                            String                              @default("")
+  distance                              Int                                 @default(0)
+  description                           String                              @default("")
+  linestring                            String                              @default("")
+  RouteFindingPublicTransportationReg   RouteFindingPublicTransportationReg @relation(fields: [routeFindingPublicTransportationRegId], references: [id])
+  routeFindingPublicTransportationRegId Int
+}
+
+// 대중교통 길 찾기 시 대중교통
+model RouteFindingPublicTransportationPassStop {
+  id                                    Int                                 @id @default(autoincrement())
+  index                                 Int                                 @default(0)
+  stationName                           String                              @default("")
+  longitude                             Int                                 @default(0)
+  latitude                              Int                                 @default(0)
+  stationId                             Int                                 @default(0)
+  RouteFindingPublicTransportationReg   RouteFindingPublicTransportationReg @relation(fields: [routeFindingPublicTransportationRegId], references: [id])
+  routeFindingPublicTransportationRegId Int
 }
